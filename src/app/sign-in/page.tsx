@@ -10,7 +10,12 @@ import { Button, Card, Field, Input } from "@/components/ui/primitives";
 import { useSignIn, useVerifyMfa } from "@/hooks/useAuth";
 import type { MfaChallenge, MfaSetup } from "@/lib/api/auth";
 import { toastError, toastSuccess } from "@/lib/toast";
-import { mfaCodeSchema, signInSchema, type MfaCodeValues, type SignInValues } from "@/schemas/auth";
+import {
+  mfaCodeSchema,
+  signInSchema,
+  type MfaCodeValues,
+  type SignInValues,
+} from "@/schemas/auth";
 
 export default function SignInPage() {
   const [mfaChallenge, setMfaChallenge] = useState<MfaChallenge | null>(null);
@@ -34,7 +39,9 @@ export default function SignInPage() {
           <h1>
             <Logo height={36} priority />
           </h1>
-          <p className="mt-3 text-sm text-ink-muted">Sign in to the editorial console.</p>
+          <p className="mt-3 text-sm text-ink-muted">
+            Sign in to the editorial console.
+          </p>
         </div>
 
         <Card className="p-6">
@@ -46,7 +53,12 @@ export default function SignInPage() {
             />
           ) : (
             <form onSubmit={onSubmit} className="space-y-4" noValidate>
-              <Field label="Email" htmlFor="email" error={errors.email?.message} required>
+              <Field
+                label="Email"
+                htmlFor="email"
+                error={errors.email?.message}
+                required
+              >
                 <Input
                   id="email"
                   type="email"
@@ -57,7 +69,12 @@ export default function SignInPage() {
                 />
               </Field>
 
-              <Field label="Password" htmlFor="password" error={errors.password?.message} required>
+              <Field
+                label="Password"
+                htmlFor="password"
+                error={errors.password?.message}
+                required
+              >
                 <Input
                   id="password"
                   type="password"
@@ -67,7 +84,12 @@ export default function SignInPage() {
                 />
               </Field>
 
-              <Button type="submit" variant="primary" className="w-full" loading={signIn.isPending}>
+              <Button
+                type="submit"
+                variant="primary"
+                className="w-full"
+                loading={signIn.isPending}
+              >
                 Sign in
               </Button>
             </form>
@@ -75,7 +97,8 @@ export default function SignInPage() {
         </Card>
 
         <p className="mt-5 text-xs leading-5 text-ink-faint">
-          Access needs a WORKSPACE_OWNER, ADMIN or SUPER_ADMIN role on your Scrubbe account.
+          Access needs a WORKSPACE_OWNER, ADMIN or SUPER_ADMIN role on your
+          Scrubbe account.
         </p>
       </div>
     </div>
@@ -123,7 +146,9 @@ function MfaStep({
           <ShieldCheck className="h-4 w-4" aria-hidden />
         </span>
         <h2 className="text-base font-semibold text-ink">
-          {challenge.setup ? "Set up two-factor sign-in" : "Two-factor verification"}
+          {challenge.setup
+            ? "Set up two-factor sign-in"
+            : "Two-factor verification"}
         </h2>
       </div>
 
@@ -143,7 +168,12 @@ function MfaStep({
       )}
 
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
-        <Field label="Authentication code" htmlFor="code" error={errors.code?.message} required>
+        <Field
+          label="Authentication code"
+          htmlFor="code"
+          error={errors.code?.message}
+          required
+        >
           <Input
             id="code"
             inputMode="numeric"
@@ -157,12 +187,22 @@ function MfaStep({
           />
         </Field>
 
-        <Button type="submit" variant="primary" className="w-full" loading={verify.isPending}>
+        <Button
+          type="submit"
+          variant="primary"
+          className="w-full"
+          loading={verify.isPending}
+        >
           Verify and sign in
         </Button>
       </form>
 
-      <Button variant="ghost" size="sm" onClick={onBack} disabled={verify.isPending}>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={onBack}
+        disabled={verify.isPending}
+      >
         <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
         Use a different account
       </Button>
@@ -171,7 +211,11 @@ function MfaStep({
 }
 
 function SetupKey({ setup }: { setup: MfaSetup }) {
-  const grouped = setup.secret.toUpperCase().match(/.{1,4}/g)?.join(" ") ?? setup.secret;
+  const grouped =
+    setup.secret
+      .toUpperCase()
+      .match(/.{1,4}/g)
+      ?.join(" ") ?? setup.secret;
 
   const copy = async () => {
     try {
@@ -185,12 +229,20 @@ function SetupKey({ setup }: { setup: MfaSetup }) {
   return (
     <div className="space-y-3">
       <p className="text-sm leading-6 text-ink-muted">
-        This account has no authenticator yet. In Google Authenticator, Authy or 1Password, add an account using
-        the setup key below, then enter the 6-digit code it shows.
+        This account has no authenticator yet. In Google Authenticator, Authy or
+        1Password, add an account using the setup key below, then enter the
+        6-digit code it shows.
       </p>
       <div className="flex items-center gap-2 rounded-md border border-line bg-raised py-2 pl-3 pr-1.5">
-        <code className="min-w-0 flex-1 break-all font-mono text-sm text-ink">{grouped}</code>
-        <Button variant="ghost" size="sm" onClick={copy} aria-label="Copy setup key">
+        <code className="min-w-0 flex-1 break-all font-mono text-sm text-ink">
+          {grouped}
+        </code>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={copy}
+          aria-label="Copy setup key"
+        >
           <Copy className="h-3.5 w-3.5" aria-hidden />
         </Button>
       </div>
