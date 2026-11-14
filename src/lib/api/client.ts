@@ -8,8 +8,10 @@ import Cookies from "js-cookie";
 
 import { ApiError, type ApiEnvelope } from "@/types/api";
 
-export const TOKEN_COOKIE = "TOKEN";
-export const REFRESH_TOKEN_COOKIE = "REFRESH_TOKEN";
+// Distinct from the customer app's TOKEN cookies. Host-only (no Domain), so they
+// are never sent to or readable by any other scrubbe.com subdomain.
+export const TOKEN_COOKIE = "SCRUBBE_ADMIN_TOKEN";
+export const REFRESH_TOKEN_COOKIE = "SCRUBBE_ADMIN_REFRESH";
 
 const SIGN_IN_PATH = "/sign-in";
 
@@ -31,9 +33,10 @@ export function getRefreshToken(): string | undefined {
 
 export function setTokens(token: string, refreshToken?: string): void {
   const secure = typeof window !== "undefined" && window.location.protocol === "https:";
-  Cookies.set(TOKEN_COOKIE, token, { sameSite: "lax", secure, path: "/" });
+  // Session cookies (no expiry): closing the browser ends the console session.
+  Cookies.set(TOKEN_COOKIE, token, { sameSite: "strict", secure, path: "/" });
   if (refreshToken) {
-    Cookies.set(REFRESH_TOKEN_COOKIE, refreshToken, { sameSite: "lax", secure, path: "/" });
+    Cookies.set(REFRESH_TOKEN_COOKIE, refreshToken, { sameSite: "strict", secure, path: "/" });
   }
 }
 
@@ -73,19 +76,20 @@ async function refreshAccessToken(): Promise<string> {
     throw new ApiError("Your session has expired. Sign in again.", 401, false);
   }
 
-  const res = await api.post<ApiEnvelope<{ token?: string; accessToken?: string; refreshToken?: string }>>(
-    "/auth/refresh-token",
+  const res = await api.post<ApiEnvelope<{ tokens?: { accessToken?: string; refreshToken?: string } }>>(
+    "/admin/auth/refresh",
     { refreshToken },
     { _isRefresh: true } as AxiosRequestConfig,
   );
 
   const body = res.data;
-  const nextToken = body.data?.token ?? body.data?.accessToken;
+  const nextToken = body.data?.tokens?.accessToken;
   if (!body.success || !nextToken) {
     throw new ApiError(body.message || "Could not refresh your session.", res.status, Boolean(body.message));
   }
 
-  setTokens(nextToken, body.data.refreshToken);
+  // The refresh token rotates on every use; the old one is now dead.
+  setTokens(nextToken, body.data.tokens?.refreshToken);
   return nextToken;
 }
 

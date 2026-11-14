@@ -1,5 +1,6 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -10,7 +11,8 @@ import { CommsHeader, ListCard, Notice, StatusBadge, TemplateLink } from "@/comp
 import { PreviewModal } from "@/components/comms/TemplateDialogs";
 import { Badge, Button, Card } from "@/components/ui/primitives";
 import { CATEGORIES, formatTimestamp } from "@/lib/comms/catalog";
-import { deliveryLogs } from "@/lib/comms/logs";
+import { request } from "@/lib/api/client";
+import { ENDPOINTS } from "@/lib/api/endpoints";
 import { findTemplate } from "@/lib/comms/operations";
 import type { EmailTemplate } from "@/types/comms";
 
@@ -31,7 +33,16 @@ export default function CommunicationsOverviewPage() {
   const all = counts(state.templates);
   const recent = [...state.templates].sort((a, b) => b.updated.localeCompare(a.updated));
   const pending = state.templates.filter((t) => t.status === "Pending Approval");
-  const failed = deliveryLogs(state).filter((log) => log.status === "Failed" || log.status === "Bounced");
+  // Real sends recorded by the API's delivery log.
+  const delivery = useQuery({
+    queryKey: ["comms-failed-deliveries"],
+    queryFn: () =>
+      request<{ items: Array<{ id: string; subject: string; recipients: string[]; error: string | null }>; last7Days: { sent: number; failed: number } }>({
+        method: "GET",
+        url: `${ENDPOINTS.comms}/delivery-logs?status=FAILED&limit=4`,
+      }),
+  });
+  const failed = delivery.data?.items ?? [];
   const incidentTemplate = findTemplate(state, "INC-02") ?? state.templates[0];
 
   const metrics: [string, string | number][] = [
@@ -39,8 +50,8 @@ export default function CommunicationsOverviewPage() {
     ["Published", all.published],
     ["Draft", all.draft],
     ["Pending approval", pending.length],
-    ["Emails sent (30 days)", "48,215*"],
-    ["Delivery success rate", "98.6%*"],
+    ["Emails sent (7 days)", delivery.data ? delivery.data.last7Days.sent : "…"],
+    ["Failed sends (7 days)", delivery.data ? delivery.data.last7Days.failed : "…"],
   ];
 
   return (
@@ -69,7 +80,6 @@ export default function CommunicationsOverviewPage() {
           </Card>
         ))}
       </div>
-      <p className="mt-2 text-xs text-ink-faint">* Demonstration figures, not live production data.</p>
 
       <h2 className="mb-3 mt-6 text-base font-semibold text-ink">How notifications flow</h2>
       <NotificationFlow />
@@ -126,15 +136,15 @@ export default function CommunicationsOverviewPage() {
             .map((t) => ({ key: t.id, start: <TemplateLink template={t} />, end: <StatusBadge status="Pending Approval" /> }))}
         />
         <ListCard
-          title="Recently failed deliveries"
-          items={failed.slice(0, 4).map((log) => ({
+          title="Recently failed sends"
+          items={failed.map((log) => ({
             key: log.id,
             start: (
-              <span className="min-w-0 truncate">
-                <span className="font-mono text-xs">{log.templateId}</span> {log.recipient}
+              <span className="min-w-0 truncate" title={log.error ?? undefined}>
+                {log.subject} <span className="text-ink-faint">{log.recipients.join(", ")}</span>
               </span>
             ),
-            end: <StatusBadge status={log.status} />,
+            end: <StatusBadge status="Failed" />,
           }))}
         />
       </div>

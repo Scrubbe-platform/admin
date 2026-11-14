@@ -451,7 +451,7 @@ export function TemplateEditor({ initial }: { initial: EmailTemplate }) {
             <b>Preview:</b> <span className="text-ink-muted">{substitute(draft.preview, draft, values, true)}</span>
             <br />
             <Badge tone="info" className="mt-1">
-              Demonstration data
+              Sample values
             </Badge>
           </div>
           {mode === "rendered" ? (
@@ -501,7 +501,7 @@ export function TemplateEditor({ initial }: { initial: EmailTemplate }) {
           </InspectorField>
 
           <h3 className="mb-1 mt-4 text-sm font-semibold text-ink">
-            Variables <span className="font-normal text-ink-faint">(demonstration sample values)</span>
+            Variables <span className="font-normal text-ink-faint">(sample values)</span>
           </h3>
           <div className="divide-y divide-line">
             {draft.variables.map((variable) => (
@@ -556,7 +556,7 @@ export function TemplateEditor({ initial }: { initial: EmailTemplate }) {
             if (!save(true)) return;
             update((s) => submitForApproval(s, draft.id));
             setDialog(null);
-            toastSuccess("Submitted for approval (simulated).");
+            toastSuccess("Submitted for approval.");
             router.push(`/communications/templates/${draft.id}`);
           }}
         />

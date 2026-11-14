@@ -1,19 +1,12 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
-import {
-  fetchCurrentUser,
-  login,
-  logout,
-  verifyMfa,
-  type LoginResult,
-  type MfaChallenge,
-} from "@/lib/api/auth";
+import { fetchCurrentUser, login, logout, verifyMfa, type LoginResult, type MfaChallenge } from "@/lib/api/auth";
 import { getToken } from "@/lib/api/client";
 import { toastError } from "@/lib/toast";
-import { hasAdminRole, type CurrentUser } from "@/types/user";
+import { can, type Capability, type CurrentUser } from "@/types/user";
 
 export const authKeys = {
   me: ["auth", "me"] as const,
@@ -31,33 +24,35 @@ export function useCurrentUser() {
   return {
     ...query,
     user: query.data ?? null,
-    isAdmin: hasAdminRole(query.data),
     hasToken: typeof window !== "undefined" && Boolean(getToken()),
+    can: (capability: Capability) => can(query.data, capability),
   };
 }
 
-/** Once a session token is stored: refetch the user and enter the console. */
+/** After a session is stored: load the staff profile and go where the user was heading. */
 function useEnterConsole() {
   const queryClient = useQueryClient();
   const router = useRouter();
+  const params = useSearchParams();
 
-  return async () => {
-    await queryClient.invalidateQueries({ queryKey: authKeys.me });
-    router.replace("/dashboard");
+  return async (user: CurrentUser) => {
+    queryClient.setQueryData(authKeys.me, user);
+    const next = params.get("next");
+    router.replace(next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard");
   };
 }
 
-export function useSignIn(onMfaChallenge?: (challenge: MfaChallenge) => void) {
+export function useSignIn(onMfaChallenge: (challenge: MfaChallenge) => void) {
   const enterConsole = useEnterConsole();
 
   return useMutation<LoginResult, unknown, { email: string; password: string }>({
     mutationFn: ({ email, password }) => login(email, password),
     onSuccess: async (result) => {
       if (result.kind === "mfa-required") {
-        onMfaChallenge?.({ mfaToken: result.mfaToken, setup: result.setup });
+        onMfaChallenge({ mfaToken: result.mfaToken, setup: result.setup });
         return;
       }
-      await enterConsole();
+      await enterConsole(result.user);
     },
     onError: (error) => toastError(error, "Could not sign you in."),
   });
@@ -66,9 +61,9 @@ export function useSignIn(onMfaChallenge?: (challenge: MfaChallenge) => void) {
 export function useVerifyMfa() {
   const enterConsole = useEnterConsole();
 
-  return useMutation<CurrentUser | null, unknown, { mfaToken: string; code: string }>({
+  return useMutation<CurrentUser, unknown, { mfaToken: string; code: string }>({
     mutationFn: ({ mfaToken, code }) => verifyMfa(mfaToken, code),
-    onSuccess: () => enterConsole(),
+    onSuccess: (user) => enterConsole(user),
     onError: (error) => toastError(error, "That code didn't work."),
   });
 }
@@ -77,8 +72,8 @@ export function useSignOut() {
   const queryClient = useQueryClient();
   const router = useRouter();
 
-  return () => {
-    logout();
+  return async () => {
+    await logout();
     queryClient.clear();
     router.replace("/sign-in");
   };

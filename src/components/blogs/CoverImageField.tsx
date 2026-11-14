@@ -8,7 +8,7 @@ import { toastError } from "@/lib/toast";
 import { uploadImage } from "@/lib/upload/uploadImage";
 
 /**
- * Two paths: upload (unwired, fails visibly) and paste a URL (works today).
+ * Two paths: upload (stored and served by the Scrubbe API) or paste an existing image URL.
  * The paste path is the honest interim, not a stand-in for the real one.
  */
 export function CoverImageField({
@@ -54,7 +54,7 @@ export function CoverImageField({
         <input
           ref={inputRef}
           type="file"
-          accept="image/png,image/jpeg,image/webp,image/avif"
+          accept="image/png,image/jpeg,image/webp,image/gif"
           className="hidden"
           onChange={(event) => {
             const file = event.target.files?.[0];

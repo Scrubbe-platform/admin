@@ -21,17 +21,7 @@ export class ApiError extends Error {
   }
 }
 
-/**
- * Thrown by any operation whose backend endpoint has not been confirmed to
- * exist. Never caught and swallowed: the UI surfaces it, so an unwired action
- * is visibly unwired rather than silently fake.
- */
-export class NotWiredError extends Error {
-  readonly operation: string;
-
-  constructor(operation: string, detail: string) {
-    super(detail);
-    this.name = "NotWiredError";
-    this.operation = operation;
-  }
+/** A 4xx is the server's considered answer (bad input, no permission, not found); repeating it changes nothing. */
+export function isClientError(error: unknown): boolean {
+  return error instanceof ApiError && error.status !== null && error.status >= 400 && error.status < 500;
 }

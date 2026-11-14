@@ -1,212 +1,94 @@
 "use client";
 
-import { Search } from "lucide-react";
-import { useMemo, useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 
-import { useComms } from "@/components/comms/CommsContext";
-import { CommsHeader, KeyValueList, Notice, Pagination, StatusBadge } from "@/components/comms/parts";
-import { Button, Card, Input, Select } from "@/components/ui/primitives";
-import { Modal } from "@/components/ui/states";
-import { formatTimestamp } from "@/lib/comms/catalog";
-import { DELIVERY_STATUSES, deliveryLogs } from "@/lib/comms/logs";
-import type { DeliveryLog } from "@/types/comms";
+import { CommsHeader, Notice } from "@/components/comms/parts";
+import { DataTable, FilterTabs, formatDate, Pager, SearchInput, StatusBadge, Toolbar, useDebounced, type Column } from "@/components/console/kit";
+import { Card } from "@/components/ui/primitives";
+import { request } from "@/lib/api/client";
+import { ENDPOINTS } from "@/lib/api/endpoints";
+import type { Page } from "@/lib/api/staff";
 
-const PAGE_SIZE = 10;
+interface Delivery {
+  id: string;
+  recipients: string[];
+  subject: string;
+  category: string | null;
+  provider: string;
+  status: "SENT" | "FAILED";
+  error: string | null;
+  createdAt: string;
+}
+
+const COLUMNS: Column<Delivery>[] = [
+  { key: "at", header: "When", render: (d) => <span className="whitespace-nowrap text-ink-muted">{formatDate(d.createdAt, true)}</span> },
+  {
+    key: "subject",
+    header: "Email",
+    render: (d) => (
+      <div className="min-w-0">
+        <p className="text-ink">{d.subject}</p>
+        <p className="text-xs text-ink-faint">{d.recipients.join(", ")}</p>
+      </div>
+    ),
+  },
+  { key: "cat", header: "Category", render: (d) => <span className="text-ink-muted">{d.category ?? "—"}</span> },
+  { key: "provider", header: "Provider", render: (d) => <span className="text-ink-muted">{d.provider}</span> },
+  {
+    key: "status",
+    header: "Result",
+    render: (d) => (
+      <div>
+        <StatusBadge status={d.status === "SENT" ? "Sent" : "Failed"} />
+        {d.error ? <p className="mt-1 max-w-xs text-xs text-danger">{d.error}</p> : null}
+      </div>
+    ),
+  },
+];
 
 export default function DeliveryLogsPage() {
-  const { state } = useComms();
-  const [query, setQuery] = useState("");
-  const [tenant, setTenant] = useState("All");
-  const [status, setStatus] = useState("All");
-  const [templateId, setTemplateId] = useState("All");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const [status, setStatus] = useState<"" | "SENT" | "FAILED">("");
+  const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
-  const [open, setOpen] = useState<DeliveryLog | null>(null);
-
-  const logs = useMemo(() => deliveryLogs(state), [state]);
-  const templateIds = useMemo(() => [...new Set(logs.map((log) => log.templateId))].sort(), [logs]);
-
-  const results = logs.filter((log) => {
-    const q = query.trim().toLowerCase();
-    const day = log.ts.slice(0, 10);
-    return (
-      (!q ||
-        [log.id, log.recipient, log.tenant, log.event, log.templateId, log.correlation, log.eventId]
-          .join(" ")
-          .toLowerCase()
-          .includes(q)) &&
-      (tenant === "All" || log.tenant === tenant) &&
-      (status === "All" || log.status === status) &&
-      (templateId === "All" || log.templateId === templateId) &&
-      (!from || day >= from) &&
-      (!to || day <= to)
-    );
+  const query = useDebounced(q);
+  const logs = useQuery({
+    queryKey: ["delivery-logs", status, query, page],
+    queryFn: () => {
+      const p = new URLSearchParams({ page: String(page), limit: "50" });
+      if (status) p.set("status", status);
+      if (query) p.set("q", query);
+      return request<Page<Delivery> & { last7Days: { sent: number; failed: number } }>({ method: "GET", url: `${ENDPOINTS.comms}/delivery-logs?${p}` });
+    },
+    placeholderData: keepPreviousData,
   });
-
-  const pages = Math.max(1, Math.ceil(results.length / PAGE_SIZE));
-  const currentPage = Math.min(page, pages);
-  const shown = results.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-
-  // Any filter change starts from the first page again.
-  const filter = (apply: () => void) => {
-    apply();
-    setPage(1);
-  };
 
   return (
     <div>
       <CommsHeader
         title="Delivery Logs"
-        description="Every delivery attempt with its event, use case, policy decision and the exact template version used. Mock records for frontend demonstration."
+        description="Every email the Scrubbe API tried to send, with the provider's result. Recorded at send time by the server."
       />
       <Notice className="mb-4">
-        Delivery status describes the email attempt only. It is separate from the policy decision and from whether any
-        remediation succeeded.
+        &ldquo;Sent&rdquo; means the provider accepted the message. Inbox delivery, bounces and opens are reported by the provider, not here.
+        {logs.data ? ` Last 7 days: ${logs.data.last7Days.sent} sent, ${logs.data.last7Days.failed} failed.` : ""}
       </Notice>
-
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[220px] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" aria-hidden />
-          <Input
-            type="search"
-            value={query}
-            onChange={(e) => filter(() => setQuery(e.target.value))}
-            placeholder="Search ID, recipient, tenant, event, correlation ID"
-            aria-label="Search deliveries"
-            className="pl-9"
-          />
-        </div>
-        <Select value={tenant} onChange={(e) => filter(() => setTenant(e.target.value))} aria-label="Tenant" className="w-auto">
-          {["All", ...state.workspaces.map((w) => w.name ?? w.id)].map((name) => (
-            <option key={name}>{name}</option>
-          ))}
-        </Select>
-        <Select value={status} onChange={(e) => filter(() => setStatus(e.target.value))} aria-label="Status" className="w-auto">
-          {["All", ...DELIVERY_STATUSES].map((s) => (
-            <option key={s}>{s}</option>
-          ))}
-        </Select>
-        <Select
-          value={templateId}
-          onChange={(e) => filter(() => setTemplateId(e.target.value))}
-          aria-label="Template"
-          className="w-auto"
-        >
-          {["All", ...templateIds].map((id) => (
-            <option key={id}>{id}</option>
-          ))}
-        </Select>
-        <label className="flex items-center gap-1.5 text-sm text-ink-muted">
-          From
-          <Input type="date" value={from} onChange={(e) => filter(() => setFrom(e.target.value))} className="w-auto" />
-        </label>
-        <label className="flex items-center gap-1.5 text-sm text-ink-muted">
-          To
-          <Input type="date" value={to} onChange={(e) => filter(() => setTo(e.target.value))} className="w-auto" />
-        </label>
-      </div>
-
-      <p className="mb-2 text-sm text-ink-muted" role="status">
-        {results.length} deliveries
-      </p>
-
-      {results.length ? (
-        <>
-          <Card className="overflow-x-auto">
-            <table className="w-full min-w-[1400px] text-sm">
-              <thead>
-                <tr className="border-b border-line text-left text-xs text-ink-faint">
-                  {[
-                    "Email ID",
-                    "Tenant",
-                    "Event",
-                    "Use case",
-                    "Template",
-                    "Recipient",
-                    "Status",
-                    "Policy decision",
-                    "Attempts",
-                    "Timestamp",
-                    "Correlation ID",
-                  ].map((heading) => (
-                    <th key={heading} className="whitespace-nowrap px-3 py-2.5 font-normal">
-                      {heading}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {shown.map((log) => (
-                  <tr key={log.id} onClick={() => setOpen(log)} className="cursor-pointer transition-colors hover:bg-raised/60">
-                    <td className="px-3 py-2.5 font-mono text-xs">{log.id}</td>
-                    <td className="px-3 py-2.5">{log.tenant}</td>
-                    <td className="px-3 py-2.5">
-                      <span className="block font-mono text-xs">{log.eventId}</span>
-                      <span className="block font-mono text-xs text-ink-faint">{log.event}</span>
-                    </td>
-                    <td className="px-3 py-2.5 text-ink-muted">{log.useCase}</td>
-                    <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs">
-                      {log.templateId} {log.version}
-                    </td>
-                    <td className="px-3 py-2.5">{log.recipient}</td>
-                    <td className="px-3 py-2.5">
-                      <StatusBadge status={log.status} />
-                    </td>
-                    <td className="px-3 py-2.5 text-ink-muted">{log.policyDecision}</td>
-                    <td className="px-3 py-2.5 tabular-nums">{log.attempts}</td>
-                    <td className="whitespace-nowrap px-3 py-2.5 text-ink-muted">{formatTimestamp(log.ts)}</td>
-                    <td className="px-3 py-2.5 font-mono text-xs">{log.correlation}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Card>
-          <Pagination page={currentPage} pages={pages} onChange={setPage} />
-        </>
-      ) : (
-        <Card className="px-6 py-10 text-center text-sm text-ink-muted">No deliveries match these filters.</Card>
-      )}
-
-      {open ? (
-        <Modal
-          open
-          wide
-          onClose={() => setOpen(null)}
-          title={open.id}
-          footer={
-            <Button variant="ghost" onClick={() => setOpen(null)}>
-              Close
-            </Button>
-          }
-        >
-          <KeyValueList
-            items={[
-              ["Tenant", open.tenant],
-              ["Event ID", <span key="i" className="font-mono text-xs">{open.eventId}</span>],
-              ["Event type", <span key="e" className="font-mono text-xs">{open.event}</span>],
-              ["Use case", open.useCase],
-              ["Template version used", <span key="t" className="font-mono text-xs">{`${open.templateId} ${open.version}`}</span>],
-              ["Recipient", open.recipient],
-              ["Policy decision", open.policyDecision],
-              ["Delivery status", <StatusBadge key="s" status={open.status} />],
-              [
-                "Provider response",
-                <span key="r" className="font-mono text-xs">
-                  {open.status === "Delivered" ? "250 2.0.0 OK (mock)" : open.reason || "202 Accepted (mock)"}
-                </span>,
-              ],
-              ["Failure reason", open.reason || "None"],
-              ["Correlation ID", <span key="c" className="font-mono text-xs">{open.correlation}</span>],
-              ["Attempts", String(open.attempts)],
+      <Card>
+        <Toolbar>
+          <SearchInput value={q} onChange={(v) => { setQ(v); setPage(1); }} placeholder="Search subject, category or exact recipient" />
+          <FilterTabs
+            value={status}
+            onChange={(v) => { setStatus(v); setPage(1); }}
+            options={[
+              { value: "", label: "All" },
+              { value: "SENT", label: "Sent" },
+              { value: "FAILED", label: "Failed" },
             ]}
           />
-          <Notice className="mt-4">
-            Delivery status is separate from the policy decision and from remediation outcome. Historical records keep the
-            template version used at the time.
-          </Notice>
-        </Modal>
-      ) : null}
+        </Toolbar>
+        <DataTable columns={COLUMNS} rows={logs.data?.items} isLoading={logs.isLoading} error={logs.error} onRetry={() => logs.refetch()} empty={{ title: "No deliveries", body: "Emails appear here as the platform sends them." }} />
+        {logs.data ? <Pager page={logs.data.page} limit={logs.data.limit} total={logs.data.total} onPage={setPage} /> : null}
+      </Card>
     </div>
   );
 }

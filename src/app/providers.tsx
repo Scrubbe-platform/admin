@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { Toaster } from "react-hot-toast";
 
-import { NotWiredError } from "@/types/api";
+import { isClientError } from "@/types/api";
 
 export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -15,8 +15,8 @@ export function Providers({ children }: { children: ReactNode }) {
             refetchOnWindowFocus: false,
             staleTime: 30_000,
             retry: (failureCount, error) => {
-              // Retrying an unwired operation just repeats the same failure.
-              if (error instanceof NotWiredError) return false;
+              // A 4xx is a definite answer; retrying only repeats it.
+              if (isClientError(error)) return false;
               return failureCount < 2;
             },
           },

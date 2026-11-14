@@ -10,13 +10,12 @@ export const acquisitionKeys = {
   desk: ["acquisition", "desk"] as const,
 };
 
-/** The desk lives in localStorage: it never goes stale, and retrying a failed read won't help. */
+/** The shared desk, stored by the Scrubbe API. */
 export function useDesk() {
   return useQuery<Desk>({
     queryKey: acquisitionKeys.desk,
-    queryFn: async () => loadDesk(),
-    staleTime: Infinity,
-    retry: false,
+    queryFn: loadDesk,
+    staleTime: 30_000,
   });
 }
 
@@ -25,8 +24,12 @@ export function useSaveDesk() {
   const queryClient = useQueryClient();
 
   return useMutation<Desk, unknown, Desk>({
-    mutationFn: async (next) => saveDesk(next),
+    mutationFn: async (next) => saveDesk(queryClient.getQueryData<Desk>(acquisitionKeys.desk), next),
     onSuccess: (saved) => queryClient.setQueryData(acquisitionKeys.desk, saved),
-    onError: (error) => toastError(error, "Couldn't save."),
+    onError: async (error) => {
+      toastError(error, "Couldn't save.");
+      // Part of a multi-record change may have landed; show what the server actually has.
+      await queryClient.invalidateQueries({ queryKey: acquisitionKeys.desk });
+    },
   });
 }

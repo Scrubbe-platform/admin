@@ -9,9 +9,7 @@
  *   avatarColor  -> stable hash of author.name (see lib/author.ts)
  *   publishedAt  -> ISO 8601, formatted at render, never stored pre-formatted
  *
- * NOT YET CONFIRMED against the backend. `GET /admin/public/blogs` returns an
- * empty array, so no live record has ever validated these field names. Treat
- * this as the proposal, not as a verified contract.
+ * This is the contract served by GET /api/v1/admin/blogs (modules/platform-admin).
  */
 
 export const BLOG_CATEGORIES = [

@@ -27,7 +27,7 @@ export default function EventMappingPage() {
       target.enabled = enabled;
       logAudit(draft, `${enabled ? "enabled" : "disabled"} trigger ${target.event}`, target.templateId);
     });
-    toastSuccess(`Trigger ${enabled ? "enabled" : "disabled"} (demonstration).`);
+    toastSuccess(`Trigger ${enabled ? "enabled" : "disabled"}.`);
   }
 
   return (
@@ -138,7 +138,7 @@ function MappingDetails({ trigger, onClose }: { trigger: Trigger; onClose: () =>
                 target.condition = condition;
               });
               onClose();
-              toastSuccess("Mapping saved (simulated). Backend policy still applies.");
+              toastSuccess("Mapping saved.");
             }}
           >
             Save mapping

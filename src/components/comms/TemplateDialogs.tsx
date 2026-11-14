@@ -5,16 +5,18 @@ import { useState, type ReactNode } from "react";
 
 import { useComms } from "@/components/comms/CommsContext";
 import { ConfirmDialog } from "@/components/comms/parts";
-import { Badge, Button, Field, Input, Select } from "@/components/ui/primitives";
+import { Badge, Button, Field, Input } from "@/components/ui/primitives";
 import { Modal } from "@/components/ui/states";
 import {
   archiveTemplate,
   duplicateTemplate,
   findTemplate,
-  logAudit,
   submitForApproval,
 } from "@/lib/comms/operations";
-import { renderEmail, sampleValues, validateTemplate, type ValidationIssue } from "@/lib/comms/render";
+import { renderEmail, sampleValues, substitute, validateTemplate, type ValidationIssue } from "@/lib/comms/render";
+import { request } from "@/lib/api/client";
+import { ENDPOINTS } from "@/lib/api/endpoints";
+import { useCurrentUser } from "@/hooks/useAuth";
 import { cn } from "@/lib/cn";
 import { toastError, toastSuccess } from "@/lib/toast";
 import type { EmailTemplate } from "@/types/comms";
@@ -71,7 +73,7 @@ export function PreviewModal({ template, width = 640, onClose }: { template: Ema
         </Button>
       }
     >
-      <Badge tone="info">Demonstration data</Badge>
+      <Badge tone="info">Sample values</Badge>
       <div className="mt-3 flex justify-center">
         <EmailFrame html={html} width={width} />
       </div>
@@ -80,7 +82,32 @@ export function PreviewModal({ template, width = 640, onClose }: { template: Ema
 }
 
 export function TestSendModal({ template, onClose }: { template: EmailTemplate; onClose: () => void }) {
-  const { update } = useComms();
+  const { state } = useComms();
+  const { user } = useCurrentUser();
+  const [to, setTo] = useState(user?.email ?? "");
+  const [sending, setSending] = useState(false);
+
+  // A real send of the rendered template with its sample values. The API only
+  // accepts staff addresses, so this can never email a customer.
+  const send = async () => {
+    const values = sampleValues(template);
+    const { html } = renderEmail(template, values, state.design);
+    setSending(true);
+    try {
+      await request({
+        method: "POST",
+        url: `${ENDPOINTS.comms}/test-send`,
+        data: { to: to.trim(), subject: substitute(template.subject, template, values, true), html, templateId: template.id },
+      });
+      onClose();
+      toastSuccess(`Test sent to ${to.trim()}.`);
+    } catch (error) {
+      toastError(error, "Couldn't send the test.");
+    } finally {
+      setSending(false);
+    }
+  };
+
   return (
     <Modal
       open
@@ -88,36 +115,22 @@ export function TestSendModal({ template, onClose }: { template: EmailTemplate; 
       title="Test send"
       footer={
         <>
-          <Button variant="ghost" onClick={onClose}>
+          <Button variant="ghost" onClick={onClose} disabled={sending}>
             Cancel
           </Button>
-          <Button
-            variant="primary"
-            onClick={() => {
-              update((draft) => logAudit(draft, "simulated test send", template.id));
-              onClose();
-              toastSuccess("Simulated test send to sandbox inbox. No real recipients contacted.");
-            }}
-          >
-            Send simulated test
+          <Button variant="primary" loading={sending} disabled={!/^\S+@\S+\.\S+$/.test(to)} onClick={send}>
+            Send test
           </Button>
         </>
       }
     >
       <p className="mb-4 text-sm leading-6 text-ink-muted">
-        Test sends go to a sandbox inbox only. No real recipients are contacted, and nothing leaves this browser in the
-        demonstration.
+        Sends this template, filled with its sample values, through the live email provider. Tests can only go to Scrubbe staff addresses, and the
+        subject is prefixed with [TEST]. The send is recorded in the delivery and audit logs.
       </p>
-      <div className="space-y-4">
-        <Field label="Recipient" htmlFor="test-recipient">
-          <Input id="test-recipient" value="sandbox@scrubbe.test" disabled readOnly />
-        </Field>
-        <Field label="Sample data set" htmlFor="test-sample">
-          <Select id="test-sample">
-            <option>Illustrative demonstration data</option>
-          </Select>
-        </Field>
-      </div>
+      <Field label="Recipient (staff address)" htmlFor="test-recipient">
+        <Input id="test-recipient" type="email" value={to} onChange={(e) => setTo(e.target.value)} />
+      </Field>
     </Modal>
   );
 }
@@ -210,7 +223,7 @@ export function useTemplateActions(): { run: (action: TemplateAction, id: string
           onSubmit={() => {
             update((draft) => submitForApproval(draft, template.id));
             close();
-            toastSuccess("Submitted for approval (simulated).");
+            toastSuccess("Submitted for approval.");
           }}
         />
       );

@@ -1,146 +1,114 @@
 "use client";
 
-import { ArrowUpRight, Briefcase, Newspaper } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 
+import { BarSeries, money, PageBody, relative, Section, StatCard } from "@/components/console/kit";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, Skeleton } from "@/components/ui/primitives";
 import { ErrorState } from "@/components/ui/states";
-import { useBlogs } from "@/hooks/useBlogs";
-import { useJobs } from "@/hooks/useJobs";
-import { formatRelative, isPastDeadline } from "@/lib/date";
+import { useCurrentUser } from "@/hooks/useAuth";
+import { fetchOverview } from "@/lib/api/staff";
+import { displayName } from "@/types/user";
 
-export default function DashboardPage() {
-  const blogs = useBlogs();
-  const jobs = useJobs();
-
-  const published = blogs.data?.filter((blog) => blog.status === "PUBLISHED").length ?? 0;
-  const drafts = blogs.data?.filter((blog) => blog.status === "DRAFT").length ?? 0;
-  const openRoles = jobs.data?.filter((job) => job.status === "OPEN").length ?? 0;
-  const expired = jobs.data?.filter((job) => isPastDeadline(job.applicationDeadline)).length ?? 0;
-
-  const recent = [...(blogs.data ?? [])]
-    .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""))
-    .slice(0, 5);
+export default function OverviewPage() {
+  const { user, can } = useCurrentUser();
+  const overview = useQuery({ queryKey: ["overview"], queryFn: fetchOverview, refetchInterval: 60_000 });
+  const o = overview.data;
 
   return (
-    <div className="pb-16">
+    <>
       <PageHeader
-        title="Dashboard"
-        description="What the marketing site is currently serving from the Scrubbe API."
+        title={user ? `Good to see you, ${displayName(user).split(" ")[0]}` : "Overview"}
+        description="Live figures from the Scrubbe platform. Every number is computed from stored records; nothing here is sampled or estimated."
       />
-
-      <div className="px-7 py-6">
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <Stat
-            label="Published posts"
-            value={published}
-            loading={blogs.isLoading}
-            href="/blogs"
-            icon={<Newspaper className="h-4 w-4" />}
-          />
-          <Stat
-            label="Drafts"
-            value={drafts}
-            loading={blogs.isLoading}
-            href="/blogs"
-          />
-          <Stat
-            label="Open roles"
-            value={openRoles}
-            loading={jobs.isLoading}
-            href="/careers"
-            icon={<Briefcase className="h-4 w-4" />}
-          />
-          <Stat
-            label="Past deadline"
-            value={expired}
-            loading={jobs.isLoading}
-            tone={expired > 0 ? "danger" : "neutral"}
-            href="/careers"
-          />
-        </div>
-
-        <Card className="mt-6">
-          <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
-            <h2 className="text-sm text-ink">Recent edits</h2>
-            <Link href="/blogs" className="text-xs text-ink-muted transition-colors hover:text-ink">
-              All posts
-            </Link>
+      <PageBody>
+        {overview.isError ? (
+          <Card>
+            <ErrorState error={overview.error} onRetry={() => overview.refetch()} />
+          </Card>
+        ) : !o ? (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <Skeleton key={i} className="h-24" />
+            ))}
           </div>
-
-          {blogs.isLoading ? (
-            <div className="space-y-3 p-5">
-              <Skeleton className="h-4 w-2/3" />
-              <Skeleton className="h-4 w-1/2" />
-              <Skeleton className="h-4 w-3/5" />
-            </div>
-          ) : blogs.isError ? (
-            <ErrorState error={blogs.error} onRetry={() => void blogs.refetch()} />
-          ) : recent.length === 0 ? (
-            <p className="px-5 py-10 text-center text-sm text-ink-muted">
-              Nothing has been published yet, so there is no edit history to show.
-            </p>
-          ) : (
-            <ul className="divide-y divide-line">
-              {recent.map((blog) => (
-                <li key={blog.id} className="flex items-center justify-between gap-4 px-5 py-3">
-                  <Link href={`/blogs/${blog.id}`} className="min-w-0 text-sm text-ink hover:text-signal-strong">
-                    <span className="block truncate">{blog.title}</span>
-                  </Link>
-                  <span className="shrink-0 text-xs text-ink-faint">{formatRelative(blog.updatedAt)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  loading,
-  note,
-  href,
-  icon,
-  tone = "neutral",
-}: {
-  label: string;
-  value: number;
-  loading: boolean;
-  note?: string;
-  href: string;
-  icon?: React.ReactNode;
-  tone?: "neutral" | "danger";
-}) {
-  return (
-    <Link href={href} className="group">
-      <Card className="h-full p-4 transition-colors group-hover:border-line-strong">
-        <div className="flex items-center justify-between text-ink-muted">
-          <span className="flex items-center gap-2 text-sm">
-            {icon}
-            {label}
-          </span>
-          <ArrowUpRight className="h-3.5 w-3.5 opacity-0 transition-opacity group-hover:opacity-100" aria-hidden />
-        </div>
-        {loading ? (
-          <Skeleton className="mt-3 h-8 w-12" />
         ) : (
-          <p
-            className={
-              tone === "danger" && value > 0
-                ? "mt-2 font-semibold text-3xl text-danger"
-                : "mt-2 font-semibold text-3xl text-ink"
-            }
-          >
-            {value}
-          </p>
+          <>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <StatCard
+                label="Workspaces"
+                value={o.totals.workspaces}
+                hint={o.totals.suspendedWorkspaces ? `${o.totals.suspendedWorkspaces} suspended` : "None suspended"}
+                href={can("workspace.read") ? "/workspaces" : undefined}
+              />
+              <StatCard
+                label="Users"
+                value={o.totals.users}
+                hint={`${o.totals.activeUsers7d} signed in this week${o.totals.suspendedUsers ? ` · ${o.totals.suspendedUsers} suspended` : ""}`}
+                href={can("user.read") ? "/users" : undefined}
+              />
+              <StatCard label="Open incidents" value={o.totals.openIncidents} hint={`${o.totals.incidents30d} raised in 30 days`} href={can("incident.read") ? "/incidents" : undefined} />
+              <StatCard
+                label="Active subscriptions"
+                value={(o.subscriptions.ACTIVE ?? 0) + (o.subscriptions.TRIALING ?? 0)}
+                hint={`${o.subscriptions.TRIALING ?? 0} trialing · ${o.subscriptions.PAST_DUE ?? 0} past due`}
+                tone={o.subscriptions.PAST_DUE ? "caution" : undefined}
+                href={can("billing.read") ? "/subscriptions" : undefined}
+              />
+              <StatCard label="Waitlist to review" value={o.queues.waitlistPending} href={can("waitlist.manage") ? "/waitlist" : undefined} tone={o.queues.waitlistPending ? "caution" : undefined} />
+              <StatCard label="New inbox messages" value={o.queues.inboxNew} href={can("inbox.manage") ? "/inbox" : undefined} tone={o.queues.inboxNew ? "caution" : undefined} />
+              {o.receivables.length === 0 ? (
+                <StatCard label="Outstanding invoices" value="—" hint="No issued, unpaid invoices" href={can("billing.read") ? "/billing" : undefined} />
+              ) : (
+                o.receivables.map((r) => (
+                  <StatCard
+                    key={r.currency}
+                    label={`Outstanding (${r.currency})`}
+                    value={money(r.outstanding, r.currency)}
+                    hint={r.overdueCount ? `${money(r.overdue, r.currency)} overdue on ${r.overdueCount} invoice${r.overdueCount === 1 ? "" : "s"}` : "Nothing overdue"}
+                    tone={r.overdueCount ? "danger" : undefined}
+                    href={can("billing.read") ? "/billing" : undefined}
+                  />
+                ))
+              )}
+            </div>
+
+            <div className="grid gap-3 lg:grid-cols-3">
+              <Card className="p-4">
+                <BarSeries points={o.series.signups} label="New users, last 30 days" />
+              </Card>
+              <Card className="p-4">
+                <BarSeries points={o.series.workspaces} label="New workspaces, last 30 days" />
+              </Card>
+              <Card className="p-4">
+                <BarSeries points={o.series.incidents} label="Incidents raised, last 30 days" />
+              </Card>
+            </div>
+
+            <Section title="Recent staff actions" description="The latest changes made from this console." actions={can("audit.read") ? <Link href="/audit" className="text-xs text-signal-strong hover:underline">Full audit log</Link> : undefined}>
+              {o.recentStaffActions.length === 0 ? (
+                <p className="px-4 py-6 text-sm text-ink-muted">No staff actions yet.</p>
+              ) : (
+                <ul className="divide-y divide-line">
+                  {o.recentStaffActions.map((a) => (
+                    <li key={a.id} className="flex items-start justify-between gap-4 px-4 py-2.5 text-sm">
+                      <div className="min-w-0">
+                        <p className="text-ink">{a.summary}</p>
+                        <p className="text-xs text-ink-faint">
+                          {a.adminEmail}
+                          {a.reason ? ` · “${a.reason}”` : ""}
+                        </p>
+                      </div>
+                      <span className="shrink-0 text-xs text-ink-faint">{relative(a.createdAt)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Section>
+          </>
         )}
-        {note ? <p className="mt-1.5 text-2xs leading-4 text-ink-faint">{note}</p> : null}
-      </Card>
-    </Link>
+      </PageBody>
+    </>
   );
 }

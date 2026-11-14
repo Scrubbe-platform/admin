@@ -46,8 +46,6 @@ export default function TemplateDetailPage() {
   const events = [...new Set([template.event, ...mappings.map((t) => t.event)])];
   const classification = templateClassification(template);
   const approvalStatus = template.approval?.status ?? (template.status === "Published" ? "Approved" : "Not submitted");
-  // Demonstration figures, derived from the id so they stay stable between visits.
-  const seed = ((template.id.length * 31 + (Number(template.id.replace(/\D/g, "")) || 0) * 17) % 900) + 100;
 
   const panels: Record<Tab, ReactNode> = {
     Overview: (
@@ -75,10 +73,6 @@ export default function TemplateDetailPage() {
                 <span className="font-mono text-xs">{template.live ?? template.version}</span>{" "}
                 <span className="text-ink-faint">(used for future deliveries)</span>
               </span>,
-            ],
-            [
-              "Delivery statistics",
-              `${seed * 40} sent, ${97 + (seed % 3)}.${seed % 10}% delivered (30 days, demonstration data)`,
             ],
             ["Recipient audience", template.audience],
             ["Delivery channel", "Email (via configured provider)"],

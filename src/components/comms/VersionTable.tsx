@@ -64,13 +64,13 @@ export function VersionTable({ template, onCompare }: { template: EmailTemplate;
         <ConfirmDialog
           title={`Roll back ${template.id} to ${rollingBack.version}?`}
           body={`Future deliveries will use ${rollingBack.version}. Historical delivery records are not changed and keep the version used at the time. In production this is a backend-authorised operation.`}
-          confirmLabel="Roll back (simulated)"
+          confirmLabel="Roll back"
           onClose={() => setRollingBack(null)}
           onConfirm={() => {
             const version = rollingBack.version;
             update((draft) => rollbackTemplate(draft, template.id, version));
             setRollingBack(null);
-            toastSuccess(`Future deliveries will use ${version} (simulated).`);
+            toastSuccess(`The library now marks ${version} as live.`);
           }}
         />
       ) : null}

@@ -21,7 +21,8 @@ const ibmMono = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: "Scrubbe Admin Console",
-  description: "Editorial console for the Scrubbe blog and careers pages.",
+  description: "Internal console for Scrubbe staff.",
+  robots: { index: false, follow: false },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

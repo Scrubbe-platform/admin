@@ -4,7 +4,7 @@ import { AlertTriangle, RefreshCw } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { cn } from "@/lib/cn";
-import { NotWiredError } from "@/types/api";
+import { isClientError } from "@/types/api";
 
 import { Button, Card, Input, Skeleton } from "./primitives";
 
@@ -44,8 +44,8 @@ export function EmptyState({
 }
 
 export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
-  // Retrying an unwired operation only repeats the same failure, so it gets no button.
-  const canRetry = !(error instanceof NotWiredError);
+  // A 4xx (no permission, not found, invalid) won't change on retry, so it gets no button.
+  const canRetry = !isClientError(error);
   const message = error instanceof Error ? error.message : "Something went wrong.";
 
   return (

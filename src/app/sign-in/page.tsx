@@ -2,7 +2,9 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, Copy, ShieldCheck } from "lucide-react";
-import { useState } from "react";
+import Link from "next/link";
+import QRCode from "qrcode";
+import { Suspense, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 
 import { Logo } from "@/components/layout/Logo";
@@ -18,6 +20,15 @@ import {
 } from "@/schemas/auth";
 
 export default function SignInPage() {
+  // useSearchParams (for ?next=) needs a Suspense boundary under the App Router.
+  return (
+    <Suspense fallback={null}>
+      <SignIn />
+    </Suspense>
+  );
+}
+
+function SignIn() {
   const [mfaChallenge, setMfaChallenge] = useState<MfaChallenge | null>(null);
   const signIn = useSignIn(setMfaChallenge);
 
@@ -40,7 +51,7 @@ export default function SignInPage() {
             <Logo height={36} priority />
           </h1>
           <p className="mt-3 text-sm text-ink-muted">
-            Sign in to the editorial console.
+            Scrubbe admin console. Staff accounts only.
           </p>
         </div>
 
@@ -96,10 +107,12 @@ export default function SignInPage() {
           )}
         </Card>
 
-        <p className="mt-5 text-xs leading-5 text-ink-faint">
-          Access needs a WORKSPACE_OWNER, ADMIN or SUPER_ADMIN role on your
-          Scrubbe account.
-        </p>
+        <div className="mt-5 flex items-center justify-between gap-3 text-xs leading-5 text-ink-faint">
+          <span>Every sign-in and action here is recorded.</span>
+          <Link href="/forgot-password" className="shrink-0 text-signal-strong hover:underline">
+            Forgot password?
+          </Link>
+        </div>
       </div>
     </div>
   );
@@ -226,13 +239,30 @@ function SetupKey({ setup }: { setup: MfaSetup }) {
     }
   };
 
+  const [qr, setQr] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    QRCode.toDataURL(setup.otpauthUrl, { margin: 1, width: 176, errorCorrectionLevel: "M" })
+      .then((url) => alive && setQr(url))
+      .catch(() => alive && setQr(null));
+    return () => {
+      alive = false;
+    };
+  }, [setup.otpauthUrl]);
+
   return (
     <div className="space-y-3">
       <p className="text-sm leading-6 text-ink-muted">
-        This account has no authenticator yet. In Google Authenticator, Authy or
-        1Password, add an account using the setup key below, then enter the
-        6-digit code it shows.
+        Two-factor sign-in is required for every staff account. Scan this code
+        with Google Authenticator, Authy or 1Password (or enter the key by
+        hand), then type the 6-digit code it shows.
       </p>
+      {qr ? (
+        <div className="flex justify-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={qr} alt="Authenticator setup QR code" width={176} height={176} className="rounded-md border border-line bg-white p-1" />
+        </div>
+      ) : null}
       <div className="flex items-center gap-2 rounded-md border border-line bg-raised py-2 pl-3 pr-1.5">
         <code className="min-w-0 flex-1 break-all font-mono text-sm text-ink">
           {grouped}

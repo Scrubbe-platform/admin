@@ -1,14 +1,20 @@
 import type { Category, CategoryId, EmailTemplate, FontKey } from "@/types/comms";
 
-/**
- * The demonstration is pinned to one morning so its seeded dates, "modified
- * today" filters and delivery timestamps always line up.
- */
-export const DEMO_TODAY = "2026-11-10";
-export const DEMO_NOW = Date.parse("2026-11-10T09:00:00Z");
+/** Today's date (YYYY-MM-DD). Kept under the old name so the library code needs no other change. */
+export let DEMO_TODAY = new Date().toISOString().slice(0, 10);
+export const DEMO_NOW = Date.now();
 
-/** The signed-in person in the demonstration. Every audited action is attributed to them. */
-export const DEMO_ACTOR = "Sarah Mitchell";
+/**
+ * The signed-in staff member's name, used for authorship on template versions
+ * and approvals. Set by the Communications layout once the session is known.
+ * The server records its own actor for every change regardless.
+ */
+export let DEMO_ACTOR = "Scrubbe staff";
+
+export function setCommsActor(name: string): void {
+  DEMO_ACTOR = name;
+  DEMO_TODAY = new Date().toISOString().slice(0, 10);
+}
 
 export function daysAgo(days: number): string {
   return new Date(DEMO_NOW - days * 86_400_000).toISOString().slice(0, 10);
@@ -184,18 +190,6 @@ export const RESPONSIBILITY_TARGETS = [
 export const TIMEZONES = ["UTC", "Europe/London", "Europe/Berlin", "America/New_York", "America/Los_Angeles", "Asia/Singapore"];
 export const LOCALES = ["en-GB", "en-US", "de-DE", "fr-FR"];
 
-/** Why a delivery can be suppressed, with demonstration record counts. Locked reasons can't be overridden. */
-export const SUPPRESSION_REASONS: [reason: string, records: number, locked: boolean][] = [
-  ["Invalid recipient", 38, false],
-  ["Hard bounce", 61, true],
-  ["Complaint", 9, true],
-  ["Unsubscribe (optional communications only)", 214, false],
-  ["Duplicate notification", 127, false],
-  ["Policy restriction", 302, false],
-  ["Rate limit", 45, false],
-  ["Inactive tenant", 12, false],
-  ["Unresolved recipient", 19, false],
-];
 
 export const RECIPIENT_RULES = [
   "Incident commander + service owners",

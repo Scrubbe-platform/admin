@@ -226,7 +226,7 @@ function RecordModal({ config, row, onClose }: { config: ModuleConfig; row: Modu
     return (
       <ConfirmDialog
         title={`${config.deleteLabel} ${row.id}?`}
-        body="This removes the record from the demonstration data and is recorded in the audit log."
+        body="This removes the record from the library and is recorded in the audit log."
         confirmLabel={config.deleteLabel}
         danger
         onClose={() => setConfirmingDelete(false)}
@@ -249,7 +249,7 @@ function RecordModal({ config, row, onClose }: { config: ModuleConfig; row: Modu
       logAudit(draft, `${label.toLowerCase()} ${row.id}`, row.id);
     });
     onClose();
-    toastSuccess(`${label} applied to ${row.id} (demonstration).`);
+    toastSuccess(`${label} applied to ${row.id}.`);
   }
 
   const items: [string, ReactNode][] = [
@@ -300,10 +300,7 @@ function RecordModal({ config, row, onClose }: { config: ModuleConfig; row: Modu
           {config.deleteLabel}
         </Button>
       </div>
-      <Notice className="mt-4">
-        Demonstration only. In production, actions are authorised and enforced by backend policy services and recorded in the
-        audit log.
-      </Notice>
+      <Notice className="mt-4">Changes are saved to the communications library and recorded in the audit log.</Notice>
     </Modal>
   );
 }
@@ -326,7 +323,7 @@ export function AddRecordModal({ config, onClose }: { config: ModuleConfig; onCl
     });
     if (!id) return;
     onClose();
-    toastSuccess(`${id} created (demonstration).`);
+    toastSuccess(`${id} created.`);
   }
 
   return (

@@ -93,20 +93,20 @@ function VersionHistory() {
                 setApproving(true);
               }}
             >
-              Approve (simulated)
+              Approve
             </Button>
             <Button size="sm" variant="ghost" className="text-danger hover:text-danger" disabled={!pending} onClick={() => setRejecting(true)}>
-              Reject (simulated)
+              Reject
             </Button>
             <Button
               size="sm"
               disabled={template.status !== "Approved"}
               onClick={() => {
                 update((draft) => publishTemplate(draft, template.id));
-                toastSuccess("Published (simulated). Production publication is backend-authorised.");
+                toastSuccess("Published to the library.");
               }}
             >
-              Publish (simulated)
+              Publish
             </Button>
           </div>
           <Notice className="mt-4">
@@ -167,10 +167,10 @@ function VersionHistory() {
                   update((draft) => approveTemplate(draft, template.id, note));
                   setApproving(false);
                   setComment("");
-                  toastSuccess("Approved (simulated). Publication is a separate action.");
+                  toastSuccess("Approved. Publication is a separate step.");
                 }}
               >
-                Approve (simulated)
+                Approve
               </Button>
             </>
           }
@@ -200,7 +200,7 @@ function VersionHistory() {
                   update((draft) => rejectTemplate(draft, template.id, reason));
                   setRejecting(false);
                   setComment("");
-                  toastSuccess("Rejected (simulated). Returned to draft.");
+                  toastSuccess("Rejected and returned to draft.");
                 }}
               >
                 Reject version

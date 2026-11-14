@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from "react";
 
 import { useComms } from "@/components/comms/CommsContext";
-import { Notice, StatusBadge, Switch } from "@/components/comms/parts";
+import { Notice, Switch } from "@/components/comms/parts";
 import { Button, Field, Input, Select } from "@/components/ui/primitives";
 import { Modal } from "@/components/ui/states";
 import {
@@ -14,7 +14,6 @@ import {
   formatTimestamp,
   isMandatoryCategory,
 } from "@/lib/comms/catalog";
-import { deliveryLogs } from "@/lib/comms/logs";
 import { logChange } from "@/lib/comms/operations";
 import { toastError, toastSuccess } from "@/lib/toast";
 import type { CategoryId, ModuleRow, TenantProfile } from "@/types/comms";
@@ -77,9 +76,6 @@ export function TenantProfileModal({ tenant, onClose }: { tenant: ModuleRow; onC
   const [profile, setProfile] = useState<TenantProfile>(() => structuredClone(existing ?? defaultProfile(tenant)));
 
   const set = <K extends keyof TenantProfile>(key: K, value: TenantProfile[K]) => setProfile((p) => ({ ...p, [key]: value }));
-  const deliveries = deliveryLogs(state)
-    .filter((log) => log.tenant === tenant.name)
-    .slice(0, 3);
   const history = state.audit.filter((entry) => entry.resource === tenant.id).slice(0, 3);
 
   function save() {
@@ -95,8 +91,6 @@ export function TenantProfileModal({ tenant, onClose }: { tenant: ModuleRow; onC
     });
     update((draft) => {
       draft.tenantProfiles[tenant.id] = { ...profile, contacts, categories };
-      const target = draft.workspaces.find((w) => w.id === tenant.id);
-      if (target) target.cfg = "Custom";
       logChange(
         draft,
         "updated tenant profile",
@@ -107,7 +101,7 @@ export function TenantProfileModal({ tenant, onClose }: { tenant: ModuleRow; onC
       );
     });
     onClose();
-    toastSuccess("Tenant profile saved (simulated).");
+    toastSuccess("Tenant profile saved.");
   }
 
   const select = (id: string, label: string, value: string, options: string[], onChange: (value: string) => void) => (
@@ -224,23 +218,6 @@ export function TenantProfileModal({ tenant, onClose }: { tenant: ModuleRow; onC
         <p className="mt-2 text-xs text-ink-faint">
           Branding assets are verified and approved by Scrubbe. Templates are never customised per tenant.
         </p>
-      </Section>
-
-      <Section title="Delivery history">
-        <div className="divide-y divide-line">
-          {deliveries.length ? (
-            deliveries.map((log) => (
-              <div key={log.id} className="flex items-center justify-between gap-3 py-2 text-sm">
-                <span className="font-mono text-xs">
-                  {log.id} {log.templateId}
-                </span>
-                <StatusBadge status={log.status} />
-              </div>
-            ))
-          ) : (
-            <p className="py-2 text-sm text-ink-faint">None</p>
-          )}
-        </div>
       </Section>
 
       <Section title="Tenant audit history">

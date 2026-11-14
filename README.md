@@ -1,79 +1,79 @@
 # Scrubbe Admin Console
 
-Editorial console for the Scrubbe marketing site: blog posts and job postings.
-It drives the existing Scrubbe backend — there is no API in this repo.
+Internal console for the people who run Scrubbe: moderate workspaces and users,
+review activity and incidents, manage commercial billing, publish blog posts and
+job openings, run the communications library, work the inbox and waitlist, and
+manage staff. Live at **https://admin.internal.scrubbe.com**.
+
+It has no API of its own. Everything goes through the Scrubbe API under
+`/api/v1/admin/*` (server: `server/src/modules/platform-admin/`), which is the
+authority for every permission check and writes the staff audit log.
 
 ```bash
-cp .env.example .env.local
+cp .env.example .env.local   # NEXT_PUBLIC_API_BASE_URL, defaults to https://api.scrubbe.com
 npm install
-npm run dev        # http://localhost:3000
+npm run dev                  # http://localhost:3000
+npm run typecheck
+npm run build
 ```
 
-| Script | |
+## Access model
+
+Staff accounts are separate from workspace accounts. A workspace user, even a
+workspace owner, cannot sign in here or call any `/admin` endpoint.
+
+| Role | Can |
 |---|---|
-| `npm run dev` | Dev server |
-| `npm run build` | Production build |
-| `npm run typecheck` | `tsc --noEmit` — passes clean |
-| `npm run lint` | ESLint |
-| `./scripts/probe-api.sh` | Probe the API for the unconfirmed write endpoints |
+| Owner | Everything, including staff accounts and console security |
+| Administrator | Moderation, content and commercial records; not staff management |
+| Support | Read workspaces and users, suspend users, inbox and waitlist |
+| Finance | Commercial records and subscriptions; workspaces read-only |
+| Editor | Blog, careers and the communications library |
 
-Sign-in needs a Scrubbe account carrying `WORKSPACE_OWNER`, `ADMIN` or
-`SUPER_ADMIN`.
+The sidebar and pages hide what a role can't use (`src/types/user.ts` mirrors the
+server's capability map), but the server enforces it regardless.
 
-## Current state: read-only
+- **Two-factor authentication is mandatory.** First sign-in enrols an
+  authenticator app (QR code); every later sign-in asks for a code.
+- **Sessions** are server-side (`AdminSession`): refresh tokens rotate, idle and
+  absolute timeouts come from console settings, and any session can be ended
+  from Account. Deactivating a staff member ends all of theirs immediately.
+- **Lockout**: 5 failed sign-ins lock the account for 15 minutes.
+- **Optional IP allowlist** in Settings.
+- **New staff** are invited from Team. The invite link sets a password once and
+  expires; nobody else ever sees it.
+- **Every staff action** (suspensions, role changes, publishes, billing changes,
+  sign-ins) is recorded with who, what, when, from where, and why where a reason
+  is required. See Audit.
 
-Reads work. **Writes do not** — no create, update, delete, publish or upload
-endpoint has been confirmed to exist, so none is called. Thirteen operations
-throw `NotWiredError` at the point the network request would happen, and the
-interface says so rather than hiding it.
+### First owner
 
-Everything up to that point is real: validation, slug generation, optimistic
-updates, previews, confirmations. Wiring the backend in is a change to two
-files. See **[HANDOFF.md](./HANDOFF.md)** for what was verified, what was not,
-and how to finish it.
+On an empty staff table the API creates the first owner at startup when
+`STAFF_BOOTSTRAP_EMAIL` is set (`server/scripts/seed-waitlist-admin.cjs`). That
+owner sets a password through "Forgot password", then enrols two-factor.
 
-## Stack
+## Moderation
 
-Next.js 14 (App Router) · TypeScript strict · Tailwind · TanStack Query ·
-react-hook-form + zod · axios · `@uiw/react-md-editor` + `rehype-sanitize` ·
-lucide-react · react-hot-toast. IBM Plex Sans for UI, IBM Plex Serif for display
-headings, IBM Plex Mono for slugs and paths.
+Suspending a user or a whole workspace takes effect at once everywhere: API
+requests, sign-in, token refresh, sockets and API keys all refuse it, and the
+workspace app signs the person out with an explanation. Lifting a suspension
+restores access; "Sign out everywhere" ends a user's sessions without suspending them.
 
-## Architecture
+## Deployment
 
-**`src/lib/api/endpoints.ts` is the only file that names a backend path.**
-Confirmed paths live in `CONFIRMED`; guessed ones live in
-`CANDIDATE_PATHS_UNVERIFIED`, which nothing imports. **`src/lib/upload/uploadImage.ts`
-is the only file that touches image upload.**
+AWS Amplify (app `scrubbe-admin`, `us-east-1`), built from `main` of this
+repository with `amplify.yml`. Environment: `NEXT_PUBLIC_API_BASE_URL=https://api.scrubbe.com`.
+Custom domain `admin.internal.scrubbe.com`. Pushing to `main` deploys.
 
-Other things worth knowing before changing them:
+Responses carry a strict CSP, `X-Frame-Options: DENY`, HSTS and
+`X-Robots-Tag: noindex` (`next.config.mjs`).
 
-- **Envelope handling.** Every response is `{ success, message, data }`.
-  `request()` in `lib/api/client.ts` unwraps `data` and treats `success: false`
-  as a failure even on HTTP 200.
-- **Token refresh is single-flight.** Concurrent 401s queue behind one refresh
-  rather than firing several and racing. One retry, then back to sign-in.
-- **Error toasts carry the server's own `message`.** Generic strings appear only
-  when the request never reached the server.
-- **Create is not optimistic.** Update, publish, close and delete are, with
-  rollback. Create is not, because the server owns the id, slug collisions and
-  timestamps — an optimistic row would be invented data.
-- **Derived fields are never stored.** Reading time comes from the word count,
-  author initials and avatar colour from the author's name. See
-  `lib/reading-time.ts` and `lib/author.ts`.
-- **Dates are ISO 8601 throughout.** The `mm/dd/yy` adapters in `lib/date.ts`
-  exist for a backend that demands the old format and are currently unused.
-- **`@next/next/no-img-element` is off.** Cover images come from a host nobody
-  has confirmed yet, so `next/image` cannot be configured for it. Switch to
-  `next/image` once the media endpoint is known.
+## Code map
 
-## Known gaps
-
-- No write endpoint confirmed. See HANDOFF.md §1.
-- MFA: sign-in detects the challenge and stops. The verify endpoint is
-  undocumented, so the code-entry step is deliberately unbuilt.
-- Drafts and closed roles are unreadable — the public endpoints only serve
-  published posts and open roles.
-- `/blog` on the marketing site still renders a hardcoded `mockBlogPosts` array
-  and ignores the API. Until that is switched over, publishing from here will
-  appear to do nothing. Out of scope for this repo; see HANDOFF.md §5.
+- `src/lib/api/endpoints.ts`: every backend path the console calls.
+- `src/lib/api/client.ts`: envelope unwrapping (`{ success, message, data }`),
+  single-flight token refresh, server error messages surfaced verbatim.
+- `src/app/(console)/`: one folder per page; `(comms)` is the communications library.
+- `src/components/console/kit.tsx`: shared tables, filters and confirm-with-reason dialogs.
+- `src/hooks/useComms.ts`, `src/hooks/useAcquisition.ts`: server-backed stores
+  with optimistic concurrency (a stale save gets a 409 and asks you to reload).

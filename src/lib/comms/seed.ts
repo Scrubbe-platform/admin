@@ -18,7 +18,7 @@ import type {
   VariableType,
 } from "@/types/comms";
 
-/** Builds the demonstration data the Communications Centre starts from. */
+/** Scrubbe's starting template library, stored on the server the first time the library is set up. */
 
 export function newBlockId(): string {
   return `b${Math.random().toString(36).slice(2, 8)}`;
