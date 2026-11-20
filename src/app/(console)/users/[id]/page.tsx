@@ -11,8 +11,8 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Badge, Button, Card } from "@/components/ui/primitives";
 import { ErrorState, TableSkeleton } from "@/components/ui/states";
 import { useCurrentUser } from "@/hooks/useAuth";
-import { fetchUser, userAction, type UserAction } from "@/lib/api/staff";
-import { toastError, toastSuccess } from "@/lib/toast";
+import { fetchUser, setWorkspaceSuspended, userAction, type UserAction } from "@/lib/api/staff";
+import { toastError, toastSuccess, toastWarning } from "@/lib/toast";
 
 const ACTIONS: Record<UserAction, { title: string; confirm: string; body: string; done: string; danger?: boolean }> = {
   suspend: {
@@ -42,22 +42,45 @@ export default function UserDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { can } = useCurrentUser();
   const qc = useQueryClient();
-  const [dialog, setDialog] = useState<UserAction | null>(null);
+  const [dialog, setDialog] = useState<UserAction | "reactivate-workspace" | null>(null);
   const user = useQuery({ queryKey: ["user", id], queryFn: () => fetchUser(id) });
+
+  const refresh = () => {
+    void qc.invalidateQueries({ queryKey: ["user", id] });
+    void qc.invalidateQueries({ queryKey: ["users"] });
+  };
 
   const action = useMutation({
     mutationFn: ({ kind, reason }: { kind: UserAction; reason: string }) => userAction(id, kind, reason),
-    onSuccess: (_d, v) => {
-      toastSuccess(ACTIONS[v.kind].done);
+    onSuccess: (result, v) => {
       setDialog(null);
-      void qc.invalidateQueries({ queryKey: ["user", id] });
-      void qc.invalidateQueries({ queryKey: ["users"] });
+      refresh();
+      // Reactivating the user doesn't lift a workspace suspension; don't imply it did.
+      if (v.kind === "reactivate" && result?.workspace?.suspendedAt) {
+        toastWarning(`User reactivated, but their workspace "${result.workspace.name}" is still suspended, so they can't sign in yet.`);
+        return;
+      }
+      toastSuccess(ACTIONS[v.kind].done);
+    },
+    onError: (e) => toastError(e, "That didn't go through."),
+  });
+
+  const workspaceAction = useMutation({
+    mutationFn: ({ workspaceId, reason }: { workspaceId: string; reason: string }) => setWorkspaceSuspended(workspaceId, false, reason),
+    onSuccess: (_d, v) => {
+      setDialog(null);
+      toastSuccess("Workspace reactivated. Its members can sign in again.");
+      refresh();
+      void qc.invalidateQueries({ queryKey: ["workspace", v.workspaceId] });
+      void qc.invalidateQueries({ queryKey: ["workspaces"] });
     },
     onError: (e) => toastError(e, "That didn't go through."),
   });
 
   const u = user.data;
   const moderate = can("user.moderate");
+  const moderateWorkspace = can("workspace.moderate");
+  const workspaceSuspended = Boolean(u?.business?.suspendedAt);
 
   return (
     <>
@@ -98,13 +121,36 @@ export default function UserDetailPage() {
               </Card>
             ) : null}
             {u.business?.suspendedAt ? (
-              <Card className="border-caution/40 bg-caution-soft p-4 text-sm text-caution">Their workspace is suspended, so they can&apos;t sign in either way.</Card>
+              <Card className="flex flex-wrap items-center justify-between gap-3 border-danger/40 bg-danger-soft p-4 text-sm text-danger">
+                <span>
+                  {u.suspendedAt ? "Their workspace is also suspended" : "Their account is active, but their workspace is suspended"}
+                  {" "}({u.business.name}, {relative(u.business.suspendedAt)}), so they can&apos;t sign in until the workspace is reactivated.
+                </span>
+                {moderateWorkspace ? (
+                  <Button size="sm" variant="primary" onClick={() => setDialog("reactivate-workspace")}>
+                    Reactivate workspace
+                  </Button>
+                ) : (
+                  <span className="text-xs">Ask an administrator to reactivate the workspace.</span>
+                )}
+              </Card>
             ) : null}
             <div className="grid gap-3 lg:grid-cols-2">
               <Section title="Account">
                 <KeyValues
                   rows={[
-                    ["Status", u.suspendedAt ? <StatusBadge key="s" status="SUSPENDED" /> : !u.isActive ? <Badge key="s">Deactivated by user</Badge> : <StatusBadge key="s" status="ACTIVE" />],
+                    [
+                      "Status",
+                      u.suspendedAt ? (
+                        <StatusBadge key="s" status="SUSPENDED" />
+                      ) : workspaceSuspended ? (
+                        <Badge key="s" tone="danger">Blocked: workspace suspended</Badge>
+                      ) : !u.isActive ? (
+                        <Badge key="s">Deactivated by user</Badge>
+                      ) : (
+                        <StatusBadge key="s" status="ACTIVE" />
+                      ),
+                    ],
                     ["Workspace", u.business ? <Link key="w" href={`/workspaces/${u.business.id}`} className="text-signal-strong hover:underline">{u.business.name}</Link> : "None"],
                     ["Roles", u.roles.map((r) => r.replace(/_/g, " ").toLowerCase()).join(", ")],
                     ["Email verified", u.isVerified ? "Yes" : "No"],
@@ -159,12 +205,34 @@ export default function UserDetailPage() {
           </>
         )}
       </PageBody>
-      {dialog ? (
+      {dialog === "reactivate-workspace" && u?.business ? (
+        <ReasonDialog
+          open
+          onClose={() => setDialog(null)}
+          title={`Reactivate workspace "${u.business.name}"?`}
+          body="This lifts the suspension for the whole workspace: every member who isn't individually suspended can sign in again. Its admins get an email."
+          confirmLabel="Reactivate workspace"
+          loading={workspaceAction.isPending}
+          onConfirm={(reason) => workspaceAction.mutate({ workspaceId: u.business!.id, reason })}
+        />
+      ) : dialog && dialog !== "reactivate-workspace" ? (
         <ReasonDialog
           open
           onClose={() => setDialog(null)}
           title={ACTIONS[dialog].title}
-          body={ACTIONS[dialog].body}
+          body={
+            dialog === "reactivate" && workspaceSuspended ? (
+              <>
+                {ACTIONS.reactivate.body}{" "}
+                <strong>
+                  Their workspace &ldquo;{u?.business?.name}&rdquo; is also suspended, so they still won&apos;t be able to sign in until you reactivate the
+                  workspace as well.
+                </strong>
+              </>
+            ) : (
+              ACTIONS[dialog].body
+            )
+          }
           confirmLabel={ACTIONS[dialog].confirm}
           danger={ACTIONS[dialog].danger}
           loading={action.isPending}

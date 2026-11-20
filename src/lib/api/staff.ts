@@ -144,7 +144,14 @@ export interface UserDetail extends UserRow {
 export const fetchUsers = (q: Query) => get<Page<UserRow>>(ENDPOINTS.users, q);
 export const fetchUser = (id: string) => get<UserDetail>(`${ENDPOINTS.users}/${id}`);
 export type UserAction = "suspend" | "reactivate" | "revoke-sessions" | "reset-mfa";
-export const userAction = (id: string, action: UserAction, reason: string) => post<unknown>(`${ENDPOINTS.users}/${id}/${action}`, { reason });
+/** Suspend/reactivate also report the workspace, because a suspended workspace locks its members out too. */
+export interface UserActionResult {
+  id?: string;
+  suspendedAt?: string | null;
+  workspace?: { id: string; name: string; suspendedAt: string | null } | null;
+  canSignIn?: boolean;
+}
+export const userAction = (id: string, action: UserAction, reason: string) => post<UserActionResult | null>(`${ENDPOINTS.users}/${id}/${action}`, { reason });
 
 // ── Incidents, activity, audit, subscriptions ────────────────────────────────
 export interface IncidentRow {

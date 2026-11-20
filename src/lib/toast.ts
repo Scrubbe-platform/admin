@@ -21,3 +21,8 @@ export function toastError(error: unknown, fallback = "That didn't go through.")
 export function toastSuccess(message: string): void {
   toast.success(message);
 }
+
+/** Done, but with something the operator still needs to act on. Stays up longer. */
+export function toastWarning(message: string): void {
+  toast(message, { icon: "⚠", duration: 9000 });
+}

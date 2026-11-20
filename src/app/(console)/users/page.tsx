@@ -27,7 +27,18 @@ const COLUMNS: Column<UserRow>[] = [
     key: "status",
     header: "Status",
     render: (u) =>
-      u.suspendedAt ? <StatusBadge status="SUSPENDED" /> : !u.isActive ? <Badge>Deactivated</Badge> : !u.isVerified ? <Badge tone="draft">Unverified</Badge> : <StatusBadge status="ACTIVE" />,
+      u.suspendedAt ? (
+        <StatusBadge status="SUSPENDED" />
+      ) : u.business?.suspendedAt ? (
+        // Their own account is fine, but the workspace suspension locks them out.
+        <Badge tone="danger">Workspace suspended</Badge>
+      ) : !u.isActive ? (
+        <Badge>Deactivated</Badge>
+      ) : !u.isVerified ? (
+        <Badge tone="draft">Unverified</Badge>
+      ) : (
+        <StatusBadge status="ACTIVE" />
+      ),
   },
   { key: "mfa", header: "2FA", render: (u) => (u.mfaEnabled ? "On" : <span className="text-caution">Off</span>) },
   { key: "last", header: "Last sign-in", render: (u) => <span className="text-ink-muted">{relative(u.lastLogin)}</span> },
